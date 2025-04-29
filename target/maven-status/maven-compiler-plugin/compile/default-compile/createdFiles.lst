@@ -1,0 +1,6 @@
+com/example/mainbot/controller/AdminController.class
+com/example/mainbot/model/Shop$ShopBuilder.class
+com/example/mainbot/service/ShopService.class
+com/example/mainbot/MainBotApplication.class
+com/example/mainbot/model/Shop.class
+com/example/mainbot/repository/ShopRepository.class

@@ -19,7 +19,7 @@ public class ShopService {
         if (shop.getNextPaymentDate() == null) {
             shop.setNextPaymentDate(LocalDate.now().plusMonths(1));
         }
-        shop.setIsActive(true);
+        shop.setActive(true);
         shop.setLastPingAt(LocalDateTime.now());
         return shopRepository.save(shop);
     }
