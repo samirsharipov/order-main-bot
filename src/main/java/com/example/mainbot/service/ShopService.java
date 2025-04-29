@@ -1,4 +1,3 @@
-
 package com.example.mainbot.service;
 
 import com.example.mainbot.model.Shop;
@@ -31,6 +30,18 @@ public class ShopService {
     public void updatePing(String botUsername) {
         shopRepository.findByBotUsername(botUsername).ifPresent(shop -> {
             shop.setLastPingAt(LocalDateTime.now());
+            shopRepository.save(shop);
+        });
+    }
+
+    public void deleteShop(Long id) {
+        shopRepository.deleteById(id);
+    }
+
+    public void updateShop(Long id, String name, String token) {
+        shopRepository.findById(id).ifPresent(shop -> {
+            shop.setName(name);
+            shop.setBotToken(token);
             shopRepository.save(shop);
         });
     }
