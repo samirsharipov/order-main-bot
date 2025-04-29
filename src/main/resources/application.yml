@@ -14,3 +14,7 @@ spring:
     properties:
       hibernate:
         format_sql: true
+
+telegram:
+  bot-username: mainbot
+  bot-token: 123456:ABC-DEFGHijklmnopqrstuvwxyz

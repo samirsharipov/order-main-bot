@@ -1,17 +1,16 @@
 
 # Main Telegram Bot
 
-Bu loyiha Telegram orqali ko‘p do‘konli order botlarni markazdan boshqarish uchun yozilgan.
+Bu Telegram bot orqali siz do‘kon botlarini markazlashtirib boshqarishingiz mumkin.
 
-## Ishga tushurish
+## API
 
-1. `application.yml` faylida PostgreSQL sozlamalarini to‘g‘rilang
-2. `mvn spring-boot:run` orqali ishga tushiring
+- `POST /api/register-bot` — Yangi bot ro‘yxatdan o‘tadi
+- `POST /api/ping?botUsername=x` — Do‘kon botlari ping yuboradi
+- `GET /api/shops` — Barcha do‘konlarni ro‘yxati
 
-## Imkoniyatlar
+## Ishga tushirish
 
-- /addshop orqali do‘kon qo‘shish
-- /status bilan barcha do‘konlarni ko‘rish
-- API orqali boshqa botlar o‘zlarini ro‘yxatdan o‘tkazadi
-
-# order-main-bot
+- PostgreSQL database yaratish: `mainbotdb`
+- `application.yml` faylini sozlash
+- `mvn spring-boot:run`
