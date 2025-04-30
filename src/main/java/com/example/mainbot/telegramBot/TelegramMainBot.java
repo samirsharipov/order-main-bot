@@ -1,6 +1,12 @@
 package com.example.mainbot.telegramBot;
 
+import com.example.mainbot.model.Category;
 import com.example.mainbot.model.Shop;
+import com.example.mainbot.model.template.BotState;
+import com.example.mainbot.repository.ShopRepository;
+import com.example.mainbot.service.CategoryService;
+import com.example.mainbot.service.cashService.RedisService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
@@ -13,13 +19,12 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.Keyboard
 
 import java.util.ArrayList;
 import java.util.List;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.util.Optional;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import com.example.mainbot.service.ShopService;
 
 @Component
+@RequiredArgsConstructor
 public class TelegramMainBot extends TelegramLongPollingBot {
 
     @Value("${telegram.bot-token}")
@@ -28,8 +33,21 @@ public class TelegramMainBot extends TelegramLongPollingBot {
     @Value("${telegram.bot-username}")
     private String botUsername;
 
-    @Autowired
-    private ShopService shopService;
+    private final ShopService shopService;
+    private final CategoryService categoryService;
+    private final ShopRepository shopRepository;
+    private final RedisService redisService;
+
+
+    @Override
+    public String getBotUsername() {
+        return botUsername;
+    }
+
+    @Override
+    public String getBotToken() {
+        return botToken;
+    }
 
     @Override
     public void onUpdateReceived(Update update) {
@@ -37,28 +55,13 @@ public class TelegramMainBot extends TelegramLongPollingBot {
             String messageText = update.getMessage().getText();
             Long chatId = update.getMessage().getChatId();
 
-            if (messageText.startsWith("/addshop ")) {
-                String[] parts = messageText.split(" ", 4);
-                if (parts.length < 4) {
-                    sendMsg(chatId, "❌ Format: /addshop <name> <botUsername> <token>");
-                    return;
-                }
-                String name = parts[1];
-                String username = parts[2];
-                String token = parts[3];
-                Shop shop = Shop.builder()
-                        .name(name)
-                        .botUsername(username)
-                        .botToken(token)
-                        .isActive(true)
-                        .nextPaymentDate(LocalDate.now().plusMonths(1))
-                        .lastPingAt(LocalDateTime.now())
-                        .build();
-                shopService.addShop(shop);
-                sendMsg(chatId, "✅ Do‘kon qo‘shildi: " + name);
-            }
+            String state = redisService.getState(chatId);
 
-            else if (messageText.equals("/listshops")) {
+            if (messageText.equals("/addshop")) {
+                redisService.saveState(chatId, BotState.WAITING_FOR_SHOP_NAME.name());
+                redisService.saveTempShop(chatId, new Shop());
+                sendMsg(chatId, "📝 Iltimos, do‘kon nomini kiriting:");
+            } else if (messageText.equals("/listshops")) {
                 List<Shop> shops = shopService.getAllShops();
                 if (shops.isEmpty()) {
                     sendMsg(chatId, "📭 Hozircha hech qanday do‘kon yo‘q.");
@@ -74,9 +77,24 @@ public class TelegramMainBot extends TelegramLongPollingBot {
                     }
                     sendMsg(chatId, sb.toString());
                 }
-            }
+            } else if (messageText.equals("/categories")) {
+                Optional<Shop> optionalShop = shopRepository.findByBotUsername(getBotUsername());
+                if (optionalShop.isEmpty()) {
+                    sendMsg(chatId, "❌ Do‘kon topilmadi.");
+                    return;
+                }
 
-            else if (messageText.startsWith("/deleteshop ")) {
+                List<Category> categories = categoryService.getAllByShopId(optionalShop.get().getId());
+                if (categories.isEmpty()) {
+                    sendMsg(chatId, "📭 Sizda hali hech qanday kategoriya mavjud emas.");
+                } else {
+                    StringBuilder sb = new StringBuilder("📂 Kategoriyalar:\n");
+                    for (Category category : categories) {
+                        sb.append("🟢 ").append(category.getName()).append("\n");
+                    }
+                    sendMsg(chatId, sb.toString());
+                }
+            } else if (messageText.startsWith("/deleteshop ")) {
                 try {
                     Long id = Long.parseLong(messageText.split(" ")[1]);
                     shopService.deleteShop(id);
@@ -84,9 +102,7 @@ public class TelegramMainBot extends TelegramLongPollingBot {
                 } catch (Exception e) {
                     sendMsg(chatId, "❌ Format: /deleteshop <id>");
                 }
-            }
-
-            else if (messageText.startsWith("/updateshop ")) {
+            } else if (messageText.startsWith("/updateshop ")) {
                 String[] parts = messageText.split(" ", 4);
                 if (parts.length < 4) {
                     sendMsg(chatId, "❌ Format: /updateshop <id> <newName> <newToken>");
@@ -101,22 +117,20 @@ public class TelegramMainBot extends TelegramLongPollingBot {
                 } catch (Exception e) {
                     sendMsg(chatId, "⚠️ ID noto‘g‘ri.");
                 }
-            }
-
-            else if (messageText.equals("/help")) {
+            } else if (messageText.equals("/help")) {
                 sendMsg(chatId,
                         """
-                        ⚙️ Boshqaruv komandalar:
-                        /addshop <name> <username> <token> - do‘kon qo‘shish
-                        /listshops - ro‘yxat
-                        /deleteshop <id> - o‘chirish
-                        /updateshop <id> <name> <token> - yangilash
-                        """
+                                ⚙️ Boshqaruv komandalar:
+                                /addshop <name> <username> <token> - do‘kon qo‘shish
+                                /listshops - ro‘yxat
+                                /deleteshop <id> - o‘chirish
+                                /updateshop <id> <name> <token> - yangilash
+                                """
                 );
-            }
-
-            else if (messageText.equals("/start")) {
+            } else if (messageText.equals("/start")) {
                 sendWelcomeMessage(chatId);
+            } else {
+                checkState(chatId, state, messageText);
             }
         }
     }
@@ -196,13 +210,34 @@ public class TelegramMainBot extends TelegramLongPollingBot {
         return keyboardMarkup;
     }
 
-    @Override
-    public String getBotUsername() {
-        return botUsername;
-    }
+    private void checkState(long chatId, String state, String messageText) {
+        switch (state) {
+            case "WAITING_FOR_SHOP_NAME" -> {
+                Shop shop = redisService.getTempShop(chatId);
+                shop.setName(messageText);
+                redisService.saveTempShop(chatId, shop);
+                redisService.saveState(chatId, BotState.WAITING_FOR_SHOP_USERNAME.name());
+                sendMsg(chatId, "📛 Bot username’ni kiriting (misol: @myshopbot):");
+            }
+            case "WAITING_FOR_SHOP_USERNAME" -> {
+                Shop shop = redisService.getTempShop(chatId);
+                shop.setBotUsername(messageText);
+                redisService.saveTempShop(chatId, shop);
+                redisService.saveState(chatId, BotState.WAITING_FOR_SHOP_TOKEN.name());
+                sendMsg(chatId, "🔑 Bot token’ni kiriting:");
+            }
+            case "WAITING_FOR_SHOP_TOKEN" -> {
+                Shop shop = redisService.getTempShop(chatId);
+                shop.setBotToken(messageText);
+                shop.setActive(true);
+                shopRepository.save(shop);
 
-    @Override
-    public String getBotToken() {
-        return botToken;
+                redisService.saveState(chatId, BotState.NONE.name());
+                redisService.deleteTempShop(chatId);
+
+                sendMsg(chatId, "✅ Do‘kon muvaffaqiyatli qo‘shildi:\n🛍 Nomi: "
+                        + shop.getName() + "\n🤖 Username: " + shop.getBotUsername());
+            }
+        }
     }
 }
